@@ -1176,6 +1176,37 @@ int AudioEndpointRequests_1(XUD_ep ep0_out, XUD_ep ep0_in, USB_SetupPacket_t &sp
     return 1;
 }
 
+unsigned char micArrayInfo[] =
+{
+    0x07, 0xFE, 0x86, 0xC1,
+    0x89, 0x48,
+    0x4d, 0xb5,
+    0xB1, 0x84,
+    0xC5, 0x16, 0x2D, 0x4A, 0xD3, 0x14,
+
+    0x00, 0x3C, // wDescriptorLength
+    0x10, 0x00, //wVersion
+    0x00, 0x00, //bmMicArrayType
+    0x00, 0x00,
+    0x00, 0x00,
+    0xDD, 0xE9,
+    0x22, 0x17,
+    0x00, 0x50,
+    0x1d, 0x4c,
+    0x00, 0x02,
+    0x00, 0x00,
+    0x00, 0x00,
+    0xff, 0xce,
+    0x00, 0x00,
+    0x00, 0x00,
+    0x00, 0x00,
+    0x00, 0x00,
+    0x00, 0x00,
+    0x00, 0x32,
+    0x00, 0x00,
+    0x00, 0x00,
+    0x00, 0x00,
+};
 
 /* Handles the Audio Class 1.0 specific requests */
 XUD_Result_t AudioClassRequests_1(XUD_ep ep0_out, XUD_ep ep0_in, USB_SetupPacket_t &sp, chanend ?c_audioControl, chanend ?c_mix_ctl, chanend ?c_clk_ctl
@@ -1190,6 +1221,18 @@ XUD_Result_t AudioClassRequests_1(XUD_ep ep0_out, XUD_ep ep0_in, USB_SetupPacket
     /* Note we could check sp.bmRequestType.Direction if we wanted to be really careful */
     switch(sp.bRequest)
     {
+        case UAC_B_REQ_GET_MEM:
+            int entity = sp.wIndex >> 8;
+            int inter = sp.wIndex & 0xff;
+            int control = sp.wValue >> 8;
+            int channel = sp.wValue & 0xff;
+
+            if((entity == 2) && (!inter) && (!control) && (!channel))
+            {
+                return XUD_DoGetRequest(ep0_out, ep0_in, buffer, sizeof(micArrayInfo), sp.wLength);
+            }
+            break;
+
         case UAC_B_REQ_SET_CUR:
         {
             unsigned datalength;

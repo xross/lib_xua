@@ -2514,7 +2514,7 @@ unsigned char cfgDesc_Audio1[] =
     UAC_CS_DESCTYPE_INTERFACE,
     0x02,                                 /* INPUT_TERMINAL */
     0x02,                                 /* Terminal ID */
-    0x01, 0x02,                           /* Type - streaming in, mic */
+    0x05, 0x02,                           /* Type - streaming in, mic */
     0x00,                                 /* Associated terminal - unused  */
     NUM_USB_CHAN_IN_FS,                   /* bNrChannels */
     CHANNEL_CONFIG_IN, 0x00,              /* wChannelConfigs */
