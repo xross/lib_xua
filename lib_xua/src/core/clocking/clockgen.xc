@@ -227,9 +227,21 @@ int VendorAudCoreReqs(unsigned cmd, chanend c);
 #pragma unsafe arrays
 void clockGen (streaming chanend ?c_spdif_rx, chanend ?c_adat_rx, client interface pll_ref_if i_pll_ref, chanend c_dig_rx, chanend c_clk_ctl, chanend c_clk_int)
 {
+#if XUA_ADAT_RX_EN
+    int curSR = clockFreq[CLOCK_ADAT];
+#endif
     timer t_local;
     unsigned timeNextEdge, timeLastEdge, timeNextClockDetection;
-    unsigned clkMode = CLOCK_INTERNAL;              /* Current clocking mode in operation */
+
+    /* Current clocking mode in operation */
+    /* Note, no USB wth SPDIF *and* ADAT is currently not supported */
+#if (XUA_USB_EN)
+    unsigned clkMode = CLOCK_INTERNAL;
+#elif (XUA_SPDIF_RX_EN)
+    unsigned clkMode = CLOCK_SPDIF;
+#elif (XUA_ADAT_RX_EN)
+    unsigned clkMode = CLOCK_ADAT;
+#endif
     unsigned tmp;
 
     /* Start in no-SMUX (8-channel) mode */
@@ -428,6 +440,8 @@ void clockGen (streaming chanend ?c_spdif_rx, chanend ?c_adat_rx, client interfa
                         break;
 
                     case SET_SMUX:
+
+                        /* Note, the EP0 task will set SMUX based on sample rate */
                         smux = inuint(c_clk_ctl);
 #if (XUA_ADAT_RX_EN)
                         adatRd = 0; /* Reset adat FIFO */
@@ -812,6 +826,20 @@ void clockGen (streaming chanend ?c_spdif_rx, chanend ?c_adat_rx, client interfa
                         adatOverflow = 0;
                     }
                 }
+#endif
+
+#if (!XUA_USB_EN)
+                if(curSR != clockFreq[CLOCK_ADAT])
+                {
+                    printstr("CLOCK: ");
+                    printintln(clockFreq[CLOCK_ADAT]);
+                    curSR = clockFreq[CLOCK_ADAT];
+
+                    outct(c_dig_rx, XS1_CT_END);
+                    outuint(c_dig_rx, clockFreq[CLOCK_ADAT]);
+                    //outct(c_dig_rx, XS1_CT_END);
+                }
+                else
 #endif
                 outuint(c_dig_rx, 1);
                 break;

@@ -16,7 +16,7 @@
 #include <xs1_su.h>
 #include <string.h>
 #include <xassert.h>
-
+#include <stdint.h>
 
 #include "xua.h"
 
@@ -41,7 +41,7 @@
 #endif
 
 #include "xua_commands.h"
-#include "xc_ptr.h"
+//#include "xc_ptr.h"
 
 #define MAX(x,y) ((x)>(y) ? (x) : (y))
 
@@ -78,7 +78,24 @@ unsigned dsdMode = DSD_MODE_OFF;
 #if (XUA_ADAT_TX_EN)
 #include "audiohub_adat.h"
 #endif
+
 #include "xua_audiohub_st.h"
+
+int32_t g_incomingRate_khz = 0;
+
+/* Measures approx sample rate based on rate function is called */
+/* Note, return value is a whole number of kHz */
+static inline int32_t MeasureSR()
+{
+    static uint32_t lastEdgeTime = 0;
+    uint32_t edgeTime;
+    asm volatile("gettime %0" : "=r"(edgeTime));
+    uint32_t edgeDiff = edgeTime > lastEdgeTime ? edgeTime-lastEdgeTime:lastEdgeTime-edgeTime;
+    lastEdgeTime = edgeTime;
+    int32_t sampleRate = (int32_t) (100000/(edgeDiff*2));
+    return sampleRate;
+}
+
 
 static inline int HandleSampleClock(int frameCount, buffered _XUA_CLK_DIR port:32 p_lrclk)
 {
@@ -86,6 +103,15 @@ static inline int HandleSampleClock(int frameCount, buffered _XUA_CLK_DIR port:3
     unsigned syncError = 0;
     unsigned lrval = 0;
     const unsigned lrval_mask = (0xffffffff << (32 - XUA_I2S_N_BITS));
+
+    int32_t incomingRate = MeasureSR();
+
+    if(g_incomingRate_Khz != incomingRate)
+    {
+        /* Rate change detected */
+    }
+
+    g_incomingRate_khz = incomingRate;
 
     if(XUA_I2S_N_BITS != 32)
     {
@@ -380,10 +406,24 @@ unsigned static AudioHub_MainLoop(chanend ?c_out, chanend ?c_spd_out
 
             if(frameCount == 0)
             {
-
 #if (XUA_SPDIF_RX_EN || XUA_ADAT_RX_EN)
-                /* Sync with clockgen */
-                inuint(c_dig_rx);
+#if (!XUA_USB_EN)
+                /* Sync with clockgen - check for a SR change */
+                if(testct(c_dig_rx))
+                {
+                    /* ClockGen() has detected a SR change in ADAT or S/PDIF stream */
+                    inct(c_dig_rx);
+
+                    /* Request digital data (with prefill) */
+                    outuint(c_dig_rx, 0);
+                    return SET_SAMPLE_FREQ;
+                }
+                else
+#endif /* (!XUA_USB_EN) */
+                {
+                    /* Sync with clockgen */
+                    inuint(c_dig_rx);
+                }
 
                 /* Note, digi-data we just store in samplesIn[readBuffNo] - we only double buffer the I2S input data */
 #endif
@@ -881,7 +921,14 @@ void XUA_AudioHub(chanend ?c_aud, clock ?clk_audio_mclk, clock ?clk_audio_bclk,
 #endif
                   , p_lrclk, p_bclk, p_i2s_dac, p_i2s_adc);
 
-#if (XUA_USB_EN)
+#if (!XUA_USB_EN)
+                /* Sample rate change detected by S/PDIF or ADAT */
+                if(command == SET_SAMPLE_FREQ)
+                {
+                    curSamFreq = inuint(c_dig_rx);
+                    printintln(curSamFreq);
+                }
+#else
                 if(command == SET_SAMPLE_FREQ)
                 {
                     curSamFreq = inuint(c_aud) * AUD_TO_USB_RATIO;
